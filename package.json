@@ -16,5 +16,10 @@
   "bugs": {
     "url": "https://github.com/rickyrabbit/VisionDatasetFbUploader/issues"
   },
-  "homepage": "https://github.com/rickyrabbit/VisionDatasetFbUploader#readme"
+  "homepage": "https://github.com/rickyrabbit/VisionDatasetFbUploader#readme",
+  "dependencies": {
+    "dotenv": "^5.0.1",
+    "facebook-api-video-upload": "^1.4.0",
+    "mongoose": "^5.0.14"
+  }
 }
