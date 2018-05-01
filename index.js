@@ -52,13 +52,12 @@ const personalPath              =process.env.VISION_PATH;
  * 
  * @return {Promise}                    Promise that contains the upload success state and facebook video id in case of a successful upload 
  */
-
 async function uploadHandler(doc){
     const filename  = doc.inputfilename+'.'+doc.extension;
-    if(env_debug){console.log(filename)};
+    console.log(`Using Object with filename: ${filename}`);
     const filePath  = doc.device+'/'+doc.media+'/'+doc.mediatipology+'/'+filename;
     const path      = personalPath+filePath;
-    if(env_debug){console.log('path: %s',path)};
+    if(env_debug){console.log(`path: ${path}`)};
 	const args = {
 		token: fbToken_page,                //  Facebook token with upload permissions
 		id: page_VisionDataset_id,          //  The id represent {page_id || user_id || event_id || group_id}
@@ -68,7 +67,7 @@ async function uploadHandler(doc){
 	};
 
     //const result = await fbUpload(args);
-    const result = fbUpload(args);
+    const result = await fbUpload(args);
 	return result;
 }
 
@@ -136,7 +135,7 @@ function dbState(num){
 /**
  * @function countQuery             Async function that counts the number of documents in the query
  * @param {String} q_extension      Query filtered with this extension
- * @param {String} q_mediaTipology  Query filtered with this mediatipology
+ * @param {String} q_mediaTipology  Query filtered with this mediatipology if it isn't 'allmt'
  * 
  * @returns                         Number of documents
  */
@@ -145,8 +144,9 @@ async function countQuery(q_extension,q_mediaTipology){
     if (q_mediaTipology!='allmt') {
         query = query.and(q_mediaTipology);
     }
-    const countD = await query.count().exec();  //Await resolves the promise
-    if(env_debug){console.log('countQuery => %s',countD )};
+    const countD =await query.count().exec();
+    //const countD = await query.count().exec();  //Await resolves the promise
+    //if(env_debug){console.log(`countQuery => ${countD}`)};
     return countD;
 }
 
@@ -156,9 +156,9 @@ async function countQuery(q_extension,q_mediaTipology){
  */
 async function attemptCloseDb(message){
         //if(env_debug){console.log('Nothing to upload!')};
-        if(env_debug){console.log('db %s closing in %s',process.env.DB_NAME,message)};
+        if(env_debug){console.log(`db ${process.env.DB_NAME} closing ${message}`)};
         await mongoose.connection.close();  //awaits the closing of the database
-        if(env_debug){console.log('db %s %s in %s',process.env.DB_NAME,dbState(mongoose.connection.readyState),message)};
+        if(env_debug){console.log(`db ${process.env.DB_NAME} ${dbState(mongoose.connection.readyState)} ${message}`)};
 }
 
 /**
@@ -174,7 +174,7 @@ async function findOne(q_extension,q_mediaTipology){
         query = query.and(q_mediaTipology);
     }
     const doc = await query.limit(1).exec();
-    if(env_debug){console.log('findOne => %s',doc )};
+    if(env_debug){console.log(`findOne => ${doc}`)};
     return doc;
 }
 
@@ -187,9 +187,8 @@ async function findOne(q_extension,q_mediaTipology){
  */
 async function updateOne(doc_id,fb_video_id){
     let query   = mediainfo.where({_id:doc_id});
-    query       = query.update({ $set:{ fbsource: fb_video_id ,uploaded: 'true'}});
+    query       = query.update({ $set:{ fbsource: fb_video_id ,uploaded: 'true'}});//TODO correct uploaded field
     const result =  await query.exec();
-    if(env_debug){console.log('updateOne => %s',result )};
     return result;
 }
 
@@ -199,66 +198,112 @@ console.clear();
 if(env_debug){console.log('debug mode ON')};
 
 let videoArgs ={
-    extension:ext_mp4,
+    extension:ext_3gp,
     mediatip:mediatipology_flat,
 }
 
-let counts=0;
+const wait_t=5000;
+const wait_fbApiCall=30000;
+
+
+count();
+
+//let counts=0;
 // for loop cycles if counts >0
-//database is closed here
-mongoose.connect(uri);
+// database is closed here
+//mongoose.connect(uri);
 
-
-countQuery(videoArgs.extension,videoArgs.mediatip).then((countD) => {
-    counts=countD;
-    if(env_debug){console.log('counts => %s',counts)};
-    attemptCloseDb('countQuery');
-});
 let dbDoc,resUpload,resUpdate,mDoc,mResUpl,mResUpd;
+
+function count(){
+    mongoose.connect(uri);
+    countQuery(videoArgs.extension,videoArgs.mediatip).then((countD) => {
+    if(countD==0){process.exit(1);}
+    counts=countD;
+    console.log("--------------------------------------------------------------");
+    console.log(`${counts} files with ${videoArgs.extension.extension} extension and ${videoArgs.mediatip.mediatipology} media tipology`);
+    attemptCloseDb('(countQuery)');
+    console.log(`Wait ${wait_fbApiCall/1000}s`);
+    setTimeout(function(){
+        console.log(`Executing uploadUpdate()`);
+        uploadUpdate();
+        },wait_fbApiCall);
+    });
+}
+
+
+//for (let i=counts;i>0;i--) {
+    //console.log(i);
+    //let status=uploadUpdate();
+    //if(status){index--;}
+//}  
+/*
+uploadUpdate().then((res) => {
+    console.log("result is %s",res)});
+*/
+
 //TODO implement for cycle @critical
-for (let index = counts; index >0 ;) {
+//for (index = counts; index >0 ;) {
     //if(env_debug){console.log('index is: %s',index)};
+function uploadUpdate(){
     mongoose.connect(uri);
     dbDoc=findOne(videoArgs.extension,videoArgs.mediatip);
     dbDoc.then((doc) => {
-        console.log(`There are ${index} remaining videos to upload`);
+        //console.log(`There are ${index} remaining videos to upload`);
         mDoc=doc[0];
-        if(env_debug){console.log('Using Object with id : %s',mDoc._id)};
+        console.log(`Using Object with id : ${mDoc._id}`);
         mResUpl=uploadHandler(mDoc);
+        console.log("Uploading video to Facebook...");
         mResUpl.then((result) => {
             resUpload=result;
             if(env_debug){
-                console.log('Success? : %s , Video id: %s',resUpload.success,resUpload.video_id);
-                console.log('resUpload  %s',resUpload);
-                console.log('success    %s',resUpload.success);
+                console.log(`Video id: ${resUpload.video_id}`);
+                console.log(`Success : ${resUpload.success}`);
             }
-            if(resUpload.success==false){
+            else{
+                console.log(`Facebook video upload was ${resUpload.success==true ? "":"un"}successful`);
+            }
+
+            if(resUpload.success!=true){
                 throw new Error('Upload failed');
             }
             if(resUpload.success==true){
-                if(env_debug){
-                    console.log('Database Update phase');
-                    console.log('db state:  %s %s',process.env.DB_NAME,dbState(mongoose.connection.readyState));
-                }
+                //if(env_debug){
+                //    console.log('Database Update phase');
+                //    console.log(`db state: ${process.env.DB_NAME} ${dbState(mongoose.connection.readyState)}`);
+                //}
                 mongoose.connect(uri);
                 mResUpd=updateOne(mDoc._id,resUpload.video_id);
+                console.log("Updating DB document...");
                 mResUpd.then((result) =>{
                     resUpdate=result;
-                    if(env_debug){console.log('ok? : %s , n: %s',resUpdate.ok,resUpdate.n)};
-                    if(resUpdate.ok==1 && resUpdate.n==1){
-                        if(env_debug){
-                            console.log('Update has been done correctly')
-                        };
-                        if(env_debug){console.log(`Index value : ${index--}`);}
-                        attemptCloseDb('Closing db after check');  
+                    console.log(`Update was ${resUpdate.ok==1 ? "":"un"}successful`);
+                    if(env_debug){                        
+                        console.log(`Number of updated docs: ${resUpdate.n}`);
                     }
-                    //  
-                })
+                    if(resUpdate.ok==1 && resUpdate.n==1){
+                        if(env_debug){console.log('DB update done correctly')};                        
+                        //console.log(`Index value : ${index--}`);
+                        attemptCloseDb('(resUpdate check)');
+                        //count();
+                        console.log(`Wait ${wait_t/1000}s`);
+                        setTimeout(function(){
+                            console.log(`Executing count()`);
+                            count();
+                            },wait_t);
+
+                    }
+                });
             }
             })
         })
-    
-    
-    
+        .catch(error => {
+            process.exit(1);
+        });
+        
 
-}//for loop parenthesis
+}
+
+    //console.log("siamo già qui");
+    
+//}//for loop parenthesis //
