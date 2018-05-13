@@ -205,7 +205,6 @@ let videoArgs ={
 const wait_t=5000;
 const wait_fbApiCall=45000;
 
-
 count();
 
 //let counts=0;
