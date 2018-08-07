@@ -20,6 +20,8 @@
   "dependencies": {
     "dotenv": "^5.0.1",
     "facebook-api-video-upload": "^1.4.0",
-    "mongoose": "^5.0.14"
+    "jsonfile": "^4.0.0",
+    "mongoose": "^5.0.14",
+    "promise-jsonfile": "^1.0.3"
   }
 }

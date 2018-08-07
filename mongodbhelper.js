@@ -2,6 +2,7 @@ require('dotenv').config();
 
 const mongoose = require("mongoose");
 
+var uri1 ="mongodb+srv://"+process.env.DB_USER+":"+process.env.DB_PASS+"@cluster0.mongodb.net/"+process.env.DB_NAME;
 var uri ='mongodb://'+process.env.DB_USER+':'+process.env.DB_PASS+'@cluster0-shard-00-00-cpfag.mongodb.net:27017,cluster0-shard-00-01-cpfag.mongodb.net:27017,cluster0-shard-00-02-cpfag.mongodb.net:27017/'+process.env.DB_NAME+'?ssl=true&replicaSet=Cluster0-shard-0&authSource=admin';
 
 mongoose.connect(uri);
@@ -62,7 +63,7 @@ function dbState(num){
 
 
 async function countQuery(q_extension,q_mediaTipology){
-    let query = mediainfo.where(notUploaded).where(q_extension);
+    let query = mediainfo.where(uploaded).where(q_extension);
     if (q_mediaTipology!='allmt') {
         query = query.and(q_mediaTipology);
     }
@@ -79,7 +80,7 @@ async function attemptCloseDb(){
 }
 
 async function findOne(q_extension,q_mediaTipology){
-    let query = mediainfo.where(notUploaded).where(q_extension);
+    let query = mediainfo.where(uploaded).where(q_extension);
     if (q_mediaTipology!='allmt') {
         query = query.and(q_mediaTipology);
     }
@@ -94,10 +95,20 @@ async function updateOne(doc_id,fb_video_id){
     return response;
 }
 
-//const result1   = countQuery(ext_mov,mediatipology_flat)
-//const result2    = findOne(ext_mp4,'allmt')
-const result3   = updateOne('5acbf856f7e5ff03a71bf819','');
+const result1   = countQuery(ext_mp4,mediatipology_outdoor)
+//const result2    =findOne(ext_mp4,'allmt');
+//const result3   = updateOne('5acbf856f7e5ff03a71bf819','');
 
-console.log(result3.toString());
-//attemptCloseDb()
+result1.then((doc) => {
+    //console.log(`There are ${index} remaining videos to upload`);
+    //mDoc=doc[0];
+    //console.log(`Using Object with id : ${mDoc._id}`);
+    //attemptCloseDb();
+    console.log(doc);
+}).catch((err) => {
+    console.log("op");
+    attemptCloseDb();
+});
+
+
 

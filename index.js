@@ -9,8 +9,12 @@ require('dotenv').config();
  * fs and path module are needed to handle file system and resolve video/images paths
  */
 const fs = require('fs');
-const path = require('path'); 
+const path = require('path');
 
+/**
+ * functions and object
+ */
+const dbhandler = require('./visiondbhandler.js')
 /**
  * facebook-api-video upload is a npm module that handles video uploading with Graph API calls
 */
@@ -66,7 +70,6 @@ async function uploadHandler(doc){
 		description: filePath               //  Video description on Facebook
 	};
 
-    //const result = await fbUpload(args);
     const result = await fbUpload(args);
 	return result;
 }
@@ -79,41 +82,17 @@ async function uploadHandler(doc){
 */
 //TODO check if version of MongoDB cluster updated to 3.6 @high 
 //see https://docs.atlas.mongodb.com/driver-connection/#node-js-driver-example
-var uri ='mongodb://'+process.env.DB_USER+':'+process.env.DB_PASS+'@cluster0-shard-00-00-cpfag.mongodb.net:27017,cluster0-shard-00-01-cpfag.mongodb.net:27017,cluster0-shard-00-02-cpfag.mongodb.net:27017/'+process.env.DB_NAME+'?ssl=true&replicaSet=Cluster0-shard-0&authSource=admin';
+var uri =dbhandler.uri;
 
-const mediaSchema =new mongoose.Schema({
-    device: 'string',
-    media: 'string',
-    mediatipology: 'string',
-    inputfilename: 'string',
-    extension: 'string',
-    uploaded:'string',
-    fbsource:'string'
-});
+const mediaSchema =dbhandler.mediaSchema;
+const mediainfo = dbhandler.mediainfo;
 
-const mediainfo = mongoose.model("videos",mediaSchema);
-
-const notUploaded   = { uploaded: 'false' };
-const uploaded      = { uploaded: 'true' };
-const ext_3gp       = { extension: '3gp' };
-const ext_mov       = { extension: 'mov' };
-const ext_mp4       = { extension: 'mp4' };
-
+const uploaded      =dbhandler.uploaded;
+const ext           =dbhandler.extension;
+const hasfbsrc           =dbhandler.hasfbsrc;
 
 // List of tipologies of media present in the database
-const mediatipology_nat         = { mediatipology: 'nat'        };
-const mediatipology_natFBH      = { mediatipology: 'natFBH'     };
-const mediatipology_natFBL      = { mediatipology: 'natFBL'     };
-const mediatipology_natWA       = { mediatipology: 'natWA'      };
-const mediatipology_flat        = { mediatipology: 'flat'       };
-const mediatipology_flatWA      = { mediatipology: 'flatWA'     };
-const mediatipology_flatYT      = { mediatipology: 'flatYT'     };
-const mediatipology_indoor      = { mediatipology: 'indoor'     };
-const mediatipology_indoorWA    = { mediatipology: 'indoorWA'   };
-const mediatipology_indoorYT    = { mediatipology: 'indoorYT'   };
-const mediatipology_outdoor     = { mediatipology: 'outdoor'    };
-const mediatipology_outdoorWA   = { mediatipology: 'outdoorWA'  };
-const mediatipology_outdoorYT   = { mediatipology: 'outdoorYT'  };
+const mediatipology =dbhandler.mediatipology;
 
 /**
  * @function dbState                Function that query the state of the database 
@@ -140,7 +119,7 @@ function dbState(num){
  * @returns                         Number of documents
  */
 async function countQuery(q_extension,q_mediaTipology){
-    let query = mediainfo.where(notUploaded).where(q_extension);
+    let query = mediainfo.where(uploaded.notDone).where(q_extension).where(hasfbsrc.false);
     if (q_mediaTipology!='allmt') {
         query = query.and(q_mediaTipology);
     }
@@ -169,7 +148,7 @@ async function attemptCloseDb(message){
  * @return {JSON Object}            Queried document with this filters
  */
 async function findOne(q_extension,q_mediaTipology){
-    let query = mediainfo.where(notUploaded).where(q_extension);
+    let query = mediainfo.where(uploaded.notDone).where(q_extension).where(hasfbsrc.false);
     if (q_mediaTipology!='allmt') {
         query = query.and(q_mediaTipology);
     }
@@ -177,6 +156,8 @@ async function findOne(q_extension,q_mediaTipology){
     if(env_debug){console.log(`findOne => ${doc}`)};
     return doc;
 }
+
+
 
 /**
  * @function updateOne              Async function that updates one selected document in the database with his facebook id
@@ -198,12 +179,13 @@ console.clear();
 if(env_debug){console.log('debug mode ON')};
 
 let videoArgs ={
-    extension:ext_mov,
-    mediatip:mediatipology_outdoor,
+    extension:ext.mov,
+    mediatip:mediatipology.outdoor,
 }
 
-const wait_t=5000;
-const wait_fbApiCall=45000;
+const wait_t=process.env.WAIT_COUNT;
+const wait_fbApiCall=process.env.WAIT_FB_APICALL;
+
 
 count();
 
@@ -294,9 +276,13 @@ function uploadUpdate(){
                     }
                 });
             }
-            })
+            }).catch(error => {
+                console.log(error.message);
+                process.exit(1);
+            });
         })
         .catch(error => {
+            console.log(error.message);
             process.exit(1);
         });
         
